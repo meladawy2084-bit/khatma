@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "isAdmin": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email"]
+    },
+    "Juz": {
+      "title": "Juz",
+      "description": "Information about a specific Juz in a Khatma",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "label": { "type": "string" },
+        "status": { "type": "string", "enum": ["AVAILABLE", "RESERVED"] },
+        "readingStatus": { "type": "string", "enum": ["NOT_STARTED", "READING", "COMPLETED"] },
+        "reservedBy": { "type": "string" },
+        "reservedById": { "type": "string" },
+        "reservedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "label", "status", "readingStatus"]
+    },
+    "Khatma": {
+      "title": "Khatma",
+      "description": "A Quran completion group",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["OPEN", "COMPLETED", "CANCELLED"] },
+        "visibility": { "type": "string", "enum": ["PUBLIC", "PRIVATE"] },
+        "parts": { "type": "array", "items": { "$ref": "#/entities/Juz" } },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "completionDua": { "type": "string" }
+      },
+      "required": ["id", "title", "status", "visibility", "createdBy", "parts"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile documents"
+    },
+    "/khatmas/{khatmaId}": {
+      "schema": "Khatma",
+      "description": "Khatma documents including parts array"
+    }
+  }
+}

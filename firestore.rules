@@ -1,0 +1,97 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.get('email', '') == "m.eladawy.2084@gmail.com" ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true)
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Entity Validations ---
+
+    function isAdminEmail() {
+      return request.auth != null && request.auth.token.get('email', '') == "m.eladawy.2084@gmail.com";
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'isAdmin', 'createdAt', 'photoURL']) &&
+             data.keys().size() == 6 &&
+             data.uid == request.auth.uid &&
+             data.name is string && data.name.size() >= 0 && data.name.size() <= 500 &&
+             data.isAdmin is bool &&
+             data.createdAt == request.time;
+    }
+
+    function isValidKhatma(data) {
+      return data.keys().hasAll(['id', 'title', 'status', 'visibility', 'createdBy', 'createdAt', 'startDate', 'endDate', 'parts']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 300 &&
+             data.status in ['OPEN', 'COMPLETED', 'CANCELLED'] &&
+             data.visibility in ['PUBLIC', 'PRIVATE'] &&
+             data.createdBy == request.auth.uid &&
+             data.createdAt == request.time &&
+             data.parts is list && data.parts.size() == 30;
+    }
+
+    function isValidJuz(data) {
+      return data.keys().hasAll(['id', 'label', 'status', 'readingStatus']) &&
+             data.id is int && data.id >= 1 && data.id <= 30 &&
+             data.label is string && data.label.size() <= 100 &&
+             data.status in ['AVAILABLE', 'RESERVED'] &&
+             data.readingStatus in ['NOT_STARTED', 'READING', 'COMPLETED'];
+    }
+
+    // --- Rules ---
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) && isValidUser(incoming()) && (incoming().isAdmin == false || isAdminEmail());
+      allow update: if isOwner(userId) && 
+                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'photoURL']) &&
+                    incoming().name is string && incoming().name.size() <= 200;
+      allow update, delete: if isAdmin();
+    }
+
+    match /khatmas/{khatmaId} {
+      allow get: if true;
+      allow list: if isAdminEmail() || isAdmin() || resource.data.visibility == 'PUBLIC' || (isSignedIn() && resource.data.createdBy == request.auth.uid);
+      
+      allow create: if isSignedIn() && isValidKhatma(incoming());
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        (existing().createdBy == request.auth.uid && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'startDate', 'endDate', 'status', 'visibility', 'completionDua', 'parts', 'adminComment'])) ||
+        (incoming().diff(existing()).affectedKeys().hasOnly(['parts']))
+      );
+      allow delete: if isAdmin() || (isSignedIn() && existing().createdBy == request.auth.uid);
+    }
+  }
+}
